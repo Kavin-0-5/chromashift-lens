@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChromaShift Debug</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #000; /* Force black background */
+            color: #00ff9d; 
+            font-family: monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+        }
+
+        /* Make the start button huge so you can't miss it */
+        #startBtn {
+            margin-top: 50px;
+            padding: 20px 40px;
+            font-size: 20px;
+            background: #00ff9d;
+            color: #000;
+            border: none;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        canvas {
+            width: 100%;
+            max-width: 600px;
+            border: 2px solid #333;
+            display: none; /* Hidden until camera starts */
+        }
+
+        /* Error log visible on screen */
+        #log {
+            margin-top: 20px;
+            color: red;
+            background: rgba(255, 0, 0, 0.1);
+            padding: 10px;
+            max-width: 90%;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+
+    <button id="startBtn" onclick="startApp()">START CAMERA</button>
+
+    <div id="log"></div>
+
+    <video id="sourceVideo" style="display:none" playsinline></video>
+    <canvas id="outputCanvas"></canvas>
+
+    <script>
+        const video = document.getElementById('sourceVideo');
+        const canvas = document.getElementById('outputCanvas');
+        const startBtn = document.getElementById('startBtn');
+        const logDiv = document.getElementById('log');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+        // Helper to show errors on screen
+        function log(msg) {
+            logDiv.innerHTML += msg + "<br>";
+            console.log(msg);
+        }
+
+        async function startApp() {
+            startBtn.style.display = 'none'; // Hide button
+            log("Requesting camera...");
+
+            try {
+                // SIMPLIFIED constraints (Works on laptop & phone)
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: true, 
+                    audio: false 
+                });
+                
+                log("Camera access granted.");
+                video.srcObject = stream;
+                video.play();
+
+                video.onloadedmetadata = () => {
+                    log("Video metadata loaded.");
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    canvas.style.display = 'block'; // Show canvas now
+                    processLoop();
+                };
+
+            } catch (err) {
+                log("ERROR: " + err.message);
+                log("Check browser permissions icon in address bar!");
+                startBtn.style.display = 'block'; // Show button again
+            }
+        }
+
+        function processLoop() {
+            if (video.paused || video.ended) return;
+
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const d = frame.data;
+
+            // Simple Red-Green Filter
+            for (let i = 0; i < d.length; i += 4) {
+                const r = d[i];
+                const g = d[i+1];
+                const b = d[i+2];
+
+                d[i] = r; 
+                d[i+1] = (g * 0.6) + (b * 0.4); 
+                d[i+2] = b;
+            }
+
+            ctx.putImageData(frame, 0, 0);
+            requestAnimationFrame(processLoop);
+        }
+    </script>
+</body>
+</html>
